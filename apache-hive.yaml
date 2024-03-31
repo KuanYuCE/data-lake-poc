@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: minio
+  name: minio
+spec:
+  containers:
+  - name: minio
+    image: minio/minio:latest
+    command:
+    - /bin/bash
+    - -c
+    args: 
+    - minio server /data --console-address :9090
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: metastore
+spec:
+  ports:
+  - port: 9083
+  selector:
+    app: metastore
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metastore
+spec:
+  selector:
+    matchLabels:
+      app: metastore
+  template:
+    metadata:
+      labels:
+        app: metastore
+    spec:
+      containers:
+      - name: metastore
+        image: apache/hive:4.0.0
+        command:
+        - /bin/bash
+        - -c
+        args: 
+        - sleep 6000
+        env:
+        - name: SERVICE_NAME
+          value: metastore
+        - name: HIVE_CUSTOM_CONF_DIR
+          value: /opt/hive-metastore/conf
+        - name: DB_DRIVER
+          value: "mysql"
+        - name: ACCESS_KEY
+          value: demo
+        - name: SECRET_ACCESS
+          value: demo
+        - name: IS_RESUME
+          value: "true"
+        - name: METASTORE_PORT
+          value: "9083"
+        ports:
+        - containerPort: 9083
+        volumeMounts:
+        - name: metastore-cfg-vol
+          mountPath: /opt/hive-metastore/conf/metastore-site.xml
+          subPath: metastore-site.xml
+        - name: metastore-cfg-vol
+          mountPath: /opt/hadoop/etc/hadoop/core-site.xml
+          subPath: core-site.xml
+        resources:
+          requests:
+            memory: "2G"
+            cpu: 1
+      volumes:
+        - name: metastore-cfg-vol
+          configMap:
+            name: metastore-cfg
+---
+kind: ConfigMap 
+apiVersion: v1 
+metadata:
+  name: metastore-cfg
+data:
+  metastore-site.xml: |
+    <configuration>
+    <property>
+      <name>metastore.task.threads.always</name>
+      <value>org.apache.hadoop.hive.metastore.events.EventCleanerTask</value>
+    </property>
+    <property>
+      <name>metastore.expression.proxy</name>
+      <value>org.apache.hadoop.hive.metastore.DefaultPartitionExpressionProxy</value>
+    </property>
+    <property>
+      <name>javax.jdo.option.ConnectionDriverName</name>
+      <value>com.mysql.jdbc.Driver</value>
+    </property>
+    <property>
+      <name>javax.jdo.option.ConnectionURL</name>
+      <value>jdbc:mysql://metastore-db:13306/lakehouse</value>
+    </property>
+    <property>
+      <name>javax.jdo.option.ConnectionUserName</name>
+      <value>root</value>
+    </property>
+    <property>
+      <name>javax.jdo.option.ConnectionPassword</name>
+      <value>demo</value>
+    </property>
+    <property>
+      <name>metastore.warehouse.dir</name>
+      <value>s3a://joshuarobinson/warehouse/</value>
+    </property>
+    <property>
+      <name>metastore.thrift.port</name>
+      <value>9083</value>
+    </property>
+    </configuration>
+  core-site.xml: |
+    <configuration>
+        <property>
+            <name>fs.s3a.connection.ssl.enabled</name>
+      <value>false</value>
+        </property>
+        <property>
+      <name>fs.s3a.endpoint</name>
+      <value>localhost:9090</value>
+        </property>
+        <property>
+      <name>fs.s3a.fast.upload</name>
+      <value>true</value>
+        </property>
+    </configuration>
