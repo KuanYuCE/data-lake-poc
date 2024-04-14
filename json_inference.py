@@ -13,7 +13,7 @@ df = spark\
         .option("multiline","true")\
         .option("inferTimestamp", "true")\
         .option("timestampFormat", "yyyy-MM-dd HH:mm:ss")\
-        .json("json-string.json")
+        .json("json_string.json")
 
 # single column cast (spark infers numeric type as longType by default)
 df = df.withColumn("no2", col("no").cast(IntegerType()))
